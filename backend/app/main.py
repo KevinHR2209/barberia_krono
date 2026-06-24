@@ -1,12 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
 from app.routers import barberos, clientes, citas, servicios, sillas, horarios
 from app.routers import citas_cancel
+from app.seed import run_seed
 
 # Crear tablas si no existen
 Base.metadata.create_all(bind=engine)
+
+# Cargar datos semilla
+db = SessionLocal()
+try:
+    run_seed(db)
+finally:
+    db.close()
 
 app = FastAPI(
     title="Barbería Krono API",
