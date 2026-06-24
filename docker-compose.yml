@@ -24,11 +24,7 @@ services:
     container_name: barberia_backend
     environment:
       DATABASE_URL: postgresql://krono:krono123@db:5432/barberia_krono
-      # Para activar emails, descomenta y completa:
-      # SMTP_HOST: smtp.gmail.com
-      # SMTP_PORT: "587"
-      # SMTP_USER: tucorreo@gmail.com
-      # SMTP_PASS: tu_contrasena_de_aplicacion
+      MAILTRAP_TOKEN: d2eae5417969c10854e3509e6f393236
       FRONTEND_URL: http://localhost:5173
     depends_on:
       db:
