@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS clientes (
     apellido VARCHAR(100) NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL,
     telefono VARCHAR(20),
+    direccion VARCHAR(300),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -42,7 +43,7 @@ CREATE TABLE IF NOT EXISTS barberos (
 CREATE TABLE IF NOT EXISTS horarios_barbero (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     barbero_id UUID NOT NULL REFERENCES barberos(id) ON DELETE CASCADE,
-    dia_semana INTEGER NOT NULL CHECK (dia_semana BETWEEN 0 AND 6), -- 0=Lunes, 6=Domingo
+    dia_semana INTEGER NOT NULL CHECK (dia_semana BETWEEN 0 AND 6),
     hora_inicio TIME NOT NULL,
     hora_fin TIME NOT NULL,
     activo BOOLEAN DEFAULT TRUE,
@@ -76,20 +77,57 @@ CREATE TABLE IF NOT EXISTS citas (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Índices de performance
+-- Índices
 CREATE INDEX idx_citas_barbero_fecha ON citas(barbero_id, fecha);
 CREATE INDEX idx_citas_cliente ON citas(cliente_id);
 CREATE INDEX idx_horarios_barbero ON horarios_barbero(barbero_id);
 
--- Datos de ejemplo
-INSERT INTO sillas (numero, descripcion) VALUES
-    (1, 'Silla principal junto a la ventana'),
-    (2, 'Silla central'),
-    (3, 'Silla del fondo');
+-- ============================================================
+-- SEED DATA
+-- ============================================================
 
+-- Sillas
+INSERT INTO sillas (id, numero, descripcion) VALUES
+    ('11111111-1111-1111-1111-111111111111', 1, 'Silla principal junto a la ventana'),
+    ('22222222-2222-2222-2222-222222222222', 2, 'Silla central del local'),
+    ('33333333-3333-3333-3333-333333333333', 3, 'Silla del fondo');
+
+-- Barberos (uno por silla)
+INSERT INTO barberos (id, nombre, apellido, email, telefono, silla_id) VALUES
+    ('aaaaaaa1-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Matías', 'González', 'matias@kronobarberia.cl', '+56912345678', '11111111-1111-1111-1111-111111111111'),
+    ('aaaaaaa2-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Sebastián', 'Rojas', 'sebastian@kronobarberia.cl', '+56923456789', '22222222-2222-2222-2222-222222222222'),
+    ('aaaaaaa3-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Nicolás', 'Muñoz', 'nicolas@kronobarberia.cl', '+56934567890', '33333333-3333-3333-3333-333333333333');
+
+-- Horarios de cada barbero (Lunes a Sábado, 09:00 - 19:00)
+INSERT INTO horarios_barbero (barbero_id, dia_semana, hora_inicio, hora_fin) VALUES
+    ('aaaaaaa1-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 0, '09:00', '19:00'),
+    ('aaaaaaa1-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 1, '09:00', '19:00'),
+    ('aaaaaaa1-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 2, '09:00', '19:00'),
+    ('aaaaaaa1-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 3, '09:00', '19:00'),
+    ('aaaaaaa1-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 4, '09:00', '19:00'),
+    ('aaaaaaa1-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 5, '09:00', '19:00'),
+    ('aaaaaaa2-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 0, '09:00', '19:00'),
+    ('aaaaaaa2-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 1, '09:00', '19:00'),
+    ('aaaaaaa2-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 2, '09:00', '19:00'),
+    ('aaaaaaa2-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 3, '09:00', '19:00'),
+    ('aaaaaaa2-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 4, '09:00', '19:00'),
+    ('aaaaaaa2-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 5, '09:00', '19:00'),
+    ('aaaaaaa3-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 0, '09:00', '19:00'),
+    ('aaaaaaa3-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 1, '09:00', '19:00'),
+    ('aaaaaaa3-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 2, '09:00', '19:00'),
+    ('aaaaaaa3-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 3, '09:00', '19:00'),
+    ('aaaaaaa3-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 4, '09:00', '19:00'),
+    ('aaaaaaa3-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 5, '09:00', '19:00');
+
+-- 10 Servicios
 INSERT INTO servicios (nombre, descripcion, duracion_minutos, precio) VALUES
     ('Corte clásico', 'Corte de cabello clásico con tijera y máquina', 30, 8000),
     ('Corte + barba', 'Corte de cabello más arreglo de barba completo', 50, 14000),
     ('Arreglo de barba', 'Perfilado y arreglo de barba con navaja', 25, 7000),
     ('Corte infantil', 'Corte de cabello para niños menores de 12 años', 20, 6000),
-    ('Corte degradado', 'Fade completo con degradado', 40, 10000);
+    ('Corte degradado', 'Fade completo con degradado a máquina', 40, 10000),
+    ('Corte + degradado + barba', 'Servicio completo: corte con fade y arreglo de barba', 70, 18000),
+    ('Afeitado con navaja', 'Afeitado tradicional con navaja y toalla caliente', 35, 9000),
+    ('Tratamiento capilar', 'Hidratación y tratamiento nutritivo para el cabello', 45, 12000),
+    ('Tinte o decoloración', 'Coloración o decoloración según requerimiento del cliente', 90, 22000),
+    ('Cejas', 'Depilación y diseño de cejas con hilo o pinza', 15, 4000);

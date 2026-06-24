@@ -8,6 +8,8 @@ import ClientesPage from './pages/ClientesPage'
 import ServiciosPage from './pages/ServiciosPage'
 import SillasPage from './pages/SillasPage'
 import NuevaCitaPage from './pages/NuevaCitaPage'
+import HorarioPage from './pages/HorarioPage'
+import ReservaPublicaPage from './pages/ReservaPublicaPage'
 
 export default function App() {
   return (
@@ -19,10 +21,14 @@ export default function App() {
         }}
       />
       <Routes>
+        {/* Vista pública para que clientes reserven */}
+        <Route path="/reservar" element={<ReservaPublicaPage />} />
+        
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="citas" element={<CitasPage />} />
           <Route path="citas/nueva" element={<NuevaCitaPage />} />
+          <Route path="horario" element={<HorarioPage />} />
           <Route path="barberos" element={<BarberosPage />} />
           <Route path="clientes" element={<ClientesPage />} />
           <Route path="servicios" element={<ServiciosPage />} />

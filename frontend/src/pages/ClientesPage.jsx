@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FiPlus, FiTrash2, FiMail, FiPhone } from 'react-icons/fi'
+import { FiPlus, FiTrash2, FiMail, FiPhone, FiMapPin } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { getClientes, createCliente, deleteCliente } from '../services/api'
 import Modal from '../components/Modal'
@@ -7,7 +7,7 @@ import Modal from '../components/Modal'
 export default function ClientesPage() {
   const [clientes, setClientes] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
-  const [form, setForm] = useState({ nombre:'', apellido:'', email:'', telefono:'' })
+  const [form, setForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'' })
   const [search, setSearch] = useState('')
 
   const cargar = () => getClientes().then(r => setClientes(r.data))
@@ -19,7 +19,7 @@ export default function ClientesPage() {
       await createCliente(form)
       toast.success('Cliente registrado')
       setModalOpen(false)
-      setForm({ nombre:'', apellido:'', email:'', telefono:'' })
+      setForm({ nombre:'', apellido:'', email:'', telefono:'', direccion:'' })
       cargar()
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error')
@@ -59,13 +59,14 @@ export default function ClientesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtrados.map(c => (
           <div key={c.id} className="card flex items-start justify-between">
-            <div>
+            <div className="flex-1">
               <div className="w-10 h-10 bg-purple-900/30 rounded-xl flex items-center justify-center text-purple-400 font-bold mb-3">
                 {c.nombre[0]}{c.apellido[0]}
               </div>
               <h3 className="text-white font-semibold">{c.nombre} {c.apellido}</h3>
               <p className="text-gray-400 text-sm flex items-center gap-1 mt-1"><FiMail className="text-xs"/> {c.email}</p>
               {c.telefono && <p className="text-gray-500 text-xs flex items-center gap-1 mt-0.5"><FiPhone className="text-xs"/> {c.telefono}</p>}
+              {c.direccion && <p className="text-gray-500 text-xs flex items-center gap-1 mt-0.5"><FiMapPin className="text-xs"/> {c.direccion}</p>}
             </div>
             <button onClick={() => eliminar(c.id)} className="p-2 bg-dark-600 hover:bg-red-900/30 text-gray-400 hover:text-red-400 rounded-lg transition-all">
               <FiTrash2 />
@@ -82,6 +83,7 @@ export default function ClientesPage() {
           </div>
           <div><label className="label">Email</label><input type="email" className="input-field" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required /></div>
           <div><label className="label">Teléfono</label><input className="input-field" value={form.telefono} onChange={e=>setForm({...form,telefono:e.target.value})} /></div>
+          <div><label className="label">Dirección</label><input className="input-field" placeholder="Ej: Av. Brasil 123, Valparaíso" value={form.direccion} onChange={e=>setForm({...form,direccion:e.target.value})} /></div>
           <button type="submit" className="btn-primary w-full justify-center">Registrar Cliente</button>
         </form>
       </Modal>
