@@ -41,40 +41,32 @@ export default function ClientesPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white">Clientes</h1>
-          <p className="text-gray-400 mt-1">{clientes.length} clientes registrados</p>
+          <h1 className="text-3xl font-bold text-gray-800">Clientes</h1>
+          <p className="text-gray-500 mt-1">{clientes.length} clientes registrados</p>
         </div>
         <button onClick={() => setModalOpen(true)} className="btn-primary">
           <FiPlus /> Nuevo Cliente
         </button>
       </div>
-
-      <input
-        className="input-field mb-6 max-w-sm"
-        placeholder="Buscar por nombre o email..."
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-      />
-
+      <input className="input-field mb-6 max-w-sm" placeholder="Buscar por nombre o email..." value={search} onChange={e => setSearch(e.target.value)} />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtrados.map(c => (
-          <div key={c.id} className="card flex items-start justify-between">
+          <div key={c.id} className="card flex items-start justify-between hover:shadow-md transition-shadow">
             <div className="flex-1">
-              <div className="w-10 h-10 bg-purple-900/30 rounded-xl flex items-center justify-center text-purple-400 font-bold mb-3">
+              <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center text-violet-700 font-bold mb-3">
                 {c.nombre[0]}{c.apellido[0]}
               </div>
-              <h3 className="text-white font-semibold">{c.nombre} {c.apellido}</h3>
-              <p className="text-gray-400 text-sm flex items-center gap-1 mt-1"><FiMail className="text-xs"/> {c.email}</p>
-              {c.telefono && <p className="text-gray-500 text-xs flex items-center gap-1 mt-0.5"><FiPhone className="text-xs"/> {c.telefono}</p>}
-              {c.direccion && <p className="text-gray-500 text-xs flex items-center gap-1 mt-0.5"><FiMapPin className="text-xs"/> {c.direccion}</p>}
+              <h3 className="text-gray-800 font-semibold">{c.nombre} {c.apellido}</h3>
+              <p className="text-gray-500 text-sm flex items-center gap-1 mt-1"><FiMail className="text-xs"/> {c.email}</p>
+              {c.telefono && <p className="text-gray-400 text-xs flex items-center gap-1 mt-0.5"><FiPhone className="text-xs"/> {c.telefono}</p>}
+              {c.direccion && <p className="text-gray-400 text-xs flex items-center gap-1 mt-0.5"><FiMapPin className="text-xs"/> {c.direccion}</p>}
             </div>
-            <button onClick={() => eliminar(c.id)} className="p-2 bg-dark-600 hover:bg-red-900/30 text-gray-400 hover:text-red-400 rounded-lg transition-all">
+            <button onClick={() => eliminar(c.id)} className="p-2 bg-dark-700 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all border border-dark-600">
               <FiTrash2 />
             </button>
           </div>
         ))}
       </div>
-
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo Cliente">
         <form onSubmit={guardar} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">

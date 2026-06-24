@@ -13,7 +13,7 @@ export default function BarberosPage() {
   const [horariosModal, setHorariosModal] = useState(null)
   const [horarios, setHorarios] = useState([])
   const [form, setForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', silla_id:'' })
-  const [horarioForm, setHorarioForm] = useState({ dia_semana:0, hora_inicio:'09:00', hora_fin:'18:00' })
+  const [horarioForm, setHorarioForm] = useState({ dia_semana:0, hora_inicio:'09:00', hora_fin:'19:00' })
 
   const cargar = () => {
     getBarberos().then(r => setBarberos(r.data))
@@ -66,8 +66,8 @@ export default function BarberosPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white">Barberos</h1>
-          <p className="text-gray-400 mt-1">{barberos.length} barberos activos</p>
+          <h1 className="text-3xl font-bold text-gray-800">Barberos</h1>
+          <p className="text-gray-500 mt-1">{barberos.length} barberos activos</p>
         </div>
         <button onClick={() => setModalOpen(true)} className="btn-primary">
           <FiPlus /> Nuevo Barbero
@@ -76,28 +76,29 @@ export default function BarberosPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {barberos.map(b => (
-          <div key={b.id} className="card">
+          <div key={b.id} className="card hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
-              <div className="w-12 h-12 bg-krono-500/20 rounded-xl flex items-center justify-center text-krono-400 text-xl font-bold">
+              <div className="w-12 h-12 bg-krono-100 rounded-xl flex items-center justify-center text-krono-700 text-xl font-bold">
                 {b.nombre[0]}{b.apellido[0]}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => abrirHorarios(b)} className="p-2 bg-dark-600 hover:bg-dark-500 text-gray-400 hover:text-white rounded-lg transition-all" title="Gestionar horarios">
+                <button onClick={() => abrirHorarios(b)}
+                  className="p-2 bg-dark-700 hover:bg-krono-50 text-gray-400 hover:text-krono-600 rounded-lg transition-all border border-dark-600" title="Gestionar horarios">
                   <FiClock />
                 </button>
-                <button onClick={() => eliminar(b.id)} className="p-2 bg-dark-600 hover:bg-red-900/30 text-gray-400 hover:text-red-400 rounded-lg transition-all">
+                <button onClick={() => eliminar(b.id)}
+                  className="p-2 bg-dark-700 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all border border-dark-600">
                   <FiTrash2 />
                 </button>
               </div>
             </div>
-            <h3 className="text-white font-semibold mt-3">{b.nombre} {b.apellido}</h3>
-            <p className="text-gray-400 text-sm">{b.email}</p>
-            {b.telefono && <p className="text-gray-500 text-xs mt-1">{b.telefono}</p>}
+            <h3 className="text-gray-800 font-semibold mt-3">{b.nombre} {b.apellido}</h3>
+            <p className="text-gray-500 text-sm">{b.email}</p>
+            {b.telefono && <p className="text-gray-400 text-xs mt-1">{b.telefono}</p>}
           </div>
         ))}
       </div>
 
-      {/* Modal nuevo barbero */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo Barbero">
         <form onSubmit={guardar} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -117,21 +118,20 @@ export default function BarberosPage() {
         </form>
       </Modal>
 
-      {/* Modal horarios */}
       <Modal isOpen={!!horariosModal} onClose={() => setHorariosModal(null)} title={`Horarios — ${horariosModal?.nombre} ${horariosModal?.apellido}`}>
         <div className="space-y-4">
           <div className="space-y-2">
             {horarios.map(h => (
-              <div key={h.id} className="flex items-center justify-between bg-dark-700 rounded-xl px-4 py-3">
-                <span className="text-white font-medium">{DIAS[h.dia_semana]}</span>
-                <span className="text-gray-400 text-sm">{h.hora_inicio.slice(0,5)} — {h.hora_fin.slice(0,5)}</span>
-                <button onClick={() => eliminarHorario(h.id)} className="text-red-400 hover:text-red-300 p-1"><FiTrash2 /></button>
+              <div key={h.id} className="flex items-center justify-between bg-dark-700 rounded-xl px-4 py-3 border border-dark-600">
+                <span className="text-gray-800 font-medium">{DIAS[h.dia_semana]}</span>
+                <span className="text-gray-500 text-sm">{h.hora_inicio.slice(0,5)} — {h.hora_fin.slice(0,5)}</span>
+                <button onClick={() => eliminarHorario(h.id)} className="text-red-400 hover:text-red-600 p-1"><FiTrash2 /></button>
               </div>
             ))}
-            {horarios.length === 0 && <p className="text-gray-500 text-center py-4">Sin horarios configurados</p>}
+            {horarios.length === 0 && <p className="text-gray-400 text-center py-4">Sin horarios configurados</p>}
           </div>
           <form onSubmit={agregarHorario} className="border-t border-dark-600 pt-4 space-y-3">
-            <p className="text-sm font-medium text-gray-300">Agregar día de atención</p>
+            <p className="text-sm font-medium text-gray-700">Agregar día de atención</p>
             <select className="input-field" value={horarioForm.dia_semana} onChange={e=>setHorarioForm({...horarioForm,dia_semana:parseInt(e.target.value)})}>
               {DIAS.map((d,i)=><option key={i} value={i}>{d}</option>)}
             </select>
