@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
 from app.routers import barberos, clientes, citas, servicios, sillas, horarios
+from app.routers import citas_cancel
 
 # Crear tablas si no existen
 Base.metadata.create_all(bind=engine)
@@ -29,6 +30,7 @@ app.include_router(horarios.router, prefix="/api/horarios", tags=["Horarios"])
 app.include_router(servicios.router, prefix="/api/servicios", tags=["Servicios"])
 app.include_router(clientes.router, prefix="/api/clientes", tags=["Clientes"])
 app.include_router(citas.router, prefix="/api/citas", tags=["Citas"])
+app.include_router(citas_cancel.router, prefix="/api/citas", tags=["Cancelación"])
 
 
 @app.get("/", tags=["Health"])

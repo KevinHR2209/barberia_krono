@@ -19,6 +19,7 @@ class Cita(Base):
     hora_fin = Column(Time, nullable=False)
     estado = Column(String(20), nullable=False, default="asignada")  # asignada | completada | cancelada
     notas = Column(Text, nullable=True)
+    cancel_token = Column(String(64), nullable=True, unique=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

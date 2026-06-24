@@ -1,70 +1,84 @@
-from sqlalchemy.orm import Session
+import secrets
 from datetime import datetime, timedelta
-from uuid import UUID
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
 from app.models.cita import Cita
+from app.models.barbero import Barbero
+from app.models.cliente import Cliente
 from app.models.servicio import Servicio
 from app.models.horario_barbero import HorarioBarbero
 from app.schemas.cita import CitaCreate
-
-
-def calcular_hora_fin(hora_inicio, duracion_minutos: int):
-    dt = datetime.combine(datetime.today(), hora_inicio)
-    return (dt + timedelta(minutes=duracion_minutos)).time()
-
-
-def validar_disponibilidad(db: Session, barbero_id: UUID, fecha, hora_inicio, hora_fin, excluir_cita_id=None):
-    """Verifica que el barbero no tenga otra cita en ese bloque horario."""
-    dia_semana = fecha.weekday()  # 0=Lunes
-
-    horario = db.query(HorarioBarbero).filter(
-        HorarioBarbero.barbero_id == barbero_id,
-        HorarioBarbero.dia_semana == dia_semana,
-        HorarioBarbero.activo == True,
-    ).first()
-
-    if not horario:
-        raise HTTPException(status_code=400, detail="El barbero no atiende ese día")
-
-    if hora_inicio < horario.hora_inicio or hora_fin > horario.hora_fin:
-        raise HTTPException(status_code=400, detail="La cita está fuera del horario del barbero")
-
-    query = db.query(Cita).filter(
-        Cita.barbero_id == barbero_id,
-        Cita.fecha == fecha,
-        Cita.estado != "cancelada",
-        Cita.hora_inicio < hora_fin,
-        Cita.hora_fin > hora_inicio,
-    )
-    if excluir_cita_id:
-        query = query.filter(Cita.id != excluir_cita_id)
-
-    conflicto = query.first()
-    if conflicto:
-        raise HTTPException(status_code=409, detail="El barbero ya tiene una cita en ese horario")
+from app.services.email_service import enviar_confirmacion
 
 
 def crear_cita(db: Session, data: CitaCreate) -> Cita:
-    servicio = db.query(Servicio).filter(Servicio.id == data.servicio_id).first()
+    barbero = db.query(Barbero).filter(Barbero.id == data.barbero_id, Barbero.activo == True).first()
+    if not barbero:
+        raise HTTPException(status_code=404, detail="Barbero no encontrado o inactivo")
+
+    servicio = db.query(Servicio).filter(Servicio.id == data.servicio_id, Servicio.activo == True).first()
     if not servicio:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
-    hora_fin = calcular_hora_fin(data.hora_inicio, servicio.duracion_minutos)
-    validar_disponibilidad(db, data.barbero_id, data.fecha, data.hora_inicio, hora_fin)
+    cliente = db.query(Cliente).filter(Cliente.id == data.cliente_id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    dia_semana = data.fecha.weekday()
+    horario = db.query(HorarioBarbero).filter(
+        HorarioBarbero.barbero_id == data.barbero_id,
+        HorarioBarbero.dia_semana == dia_semana,
+        HorarioBarbero.activo == True,
+    ).first()
+    if not horario:
+        raise HTTPException(status_code=400, detail="El barbero no atiende ese día")
+
+    hora_inicio = data.hora_inicio
+    hora_fin = (datetime.combine(data.fecha, hora_inicio) + timedelta(minutes=servicio.duracion_minutos)).time()
+
+    conflicto = db.query(Cita).filter(
+        Cita.barbero_id == data.barbero_id,
+        Cita.fecha == data.fecha,
+        Cita.estado != "cancelada",
+        Cita.hora_inicio < hora_fin,
+        Cita.hora_fin > hora_inicio,
+    ).first()
+    if conflicto:
+        raise HTTPException(status_code=409, detail="Ya existe una cita en ese horario")
+
+    cancel_token = secrets.token_urlsafe(32)
 
     cita = Cita(
         cliente_id=data.cliente_id,
         barbero_id=data.barbero_id,
         servicio_id=data.servicio_id,
-        silla_id=data.silla_id,
+        silla_id=barbero.silla_id,
         fecha=data.fecha,
-        hora_inicio=data.hora_inicio,
+        hora_inicio=hora_inicio,
         hora_fin=hora_fin,
         notas=data.notas,
-        estado="asignada",
+        cancel_token=cancel_token,
     )
     db.add(cita)
     db.commit()
     db.refresh(cita)
+
+    # Enviar correo en background (no bloquea la respuesta)
+    try:
+        from app.models.cliente import Cliente as ClienteModel
+        c = db.query(ClienteModel).filter(ClienteModel.id == cita.cliente_id).first()
+        if c and c.email:
+            enviar_confirmacion(c.email, {
+                "cliente_nombre": c.nombre,
+                "barbero": f"{barbero.nombre} {barbero.apellido}",
+                "servicio": servicio.nombre,
+                "fecha": str(data.fecha),
+                "hora": str(hora_inicio)[:5],
+                "duracion": servicio.duracion_minutos,
+                "cancel_token": cancel_token,
+            })
+    except Exception as e:
+        print(f"[EMAIL] Error al preparar envío: {e}")
+
     return cita

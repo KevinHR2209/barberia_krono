@@ -1,52 +1,54 @@
-version: '3.9'
+version: '3.8'
 
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres:15
     container_name: barberia_db
-    restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-krono_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-krono_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-barberia_krono}
+      POSTGRES_USER: krono
+      POSTGRES_PASSWORD: krono123
+      POSTGRES_DB: barberia_krono
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
-    networks:
-      - barberia_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U krono -d barberia_krono"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./backend
     container_name: barberia_backend
-    restart: always
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://krono_user:krono_pass@db:5432/barberia_krono}
-      SECRET_KEY: ${SECRET_KEY:-supersecretkey}
-    volumes:
-      - ./backend:/app
+      DATABASE_URL: postgresql://krono:krono123@db:5432/barberia_krono
+      # Para activar emails, descomenta y completa:
+      # SMTP_HOST: smtp.gmail.com
+      # SMTP_PORT: "587"
+      # SMTP_USER: tucorreo@gmail.com
+      # SMTP_PASS: tu_contrasena_de_aplicacion
+      FRONTEND_URL: http://localhost:5173
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
-    depends_on:
-      - db
-    networks:
-      - barberia_net
+    volumes:
+      - ./backend:/app
 
   frontend:
     build: ./frontend
     container_name: barberia_frontend
-    restart: always
+    environment:
+      - VITE_API_URL=http://localhost:8000
     ports:
       - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
     depends_on:
       - backend
-    networks:
-      - barberia_net
 
 volumes:
   postgres_data:
-
-networks:
-  barberia_net:
-    driver: bridge
