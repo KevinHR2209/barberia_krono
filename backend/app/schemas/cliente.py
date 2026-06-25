@@ -10,6 +10,7 @@ class ClienteBase(BaseModel):
     email: EmailStr
     telefono: Optional[str] = None
     direccion: Optional[str] = None
+    comuna: str
 
 
 class ClienteCreate(ClienteBase):
@@ -22,6 +23,7 @@ class ClienteUpdate(BaseModel):
     email: Optional[EmailStr] = None
     telefono: Optional[str] = None
     direccion: Optional[str] = None
+    comuna: Optional[str] = None
 
 
 class ClienteOut(ClienteBase):

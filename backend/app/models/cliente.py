@@ -14,5 +14,6 @@ class Cliente(Base):
     email = Column(String(200), unique=True, nullable=False)
     telefono = Column(String(20), nullable=True)
     direccion = Column(String(300), nullable=True)
+    comuna = Column(String(100), server_default='', nullable=False)
     activo = Column(Boolean, server_default='true', default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -31,7 +31,7 @@ export default function NuevaCitaPage() {
   const [horarios, setHorarios] = useState([])
   const [nuevoCliente, setNuevoCliente] = useState(false)
   const [form, setForm] = useState({ cliente_id:'', barbero_id:'', servicio_id:'', fecha:'', hora_inicio:'', notas:'' })
-  const [clienteForm, setClienteForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'' })
+  const [clienteForm, setClienteForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'', comuna:'' })
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
@@ -64,6 +64,8 @@ export default function NuevaCitaPage() {
     if (nuevoCliente) {
       if (clienteForm.email && !EMAIL_RE.test(clienteForm.email)) e.email = 'Email inválido (ej: nombre@dominio.cl)'
       if (clienteForm.telefono && !TEL_RE.test(clienteForm.telefono)) e.telefono = 'Teléfono inválido (ej: +56912345678)'
+      if (!clienteForm.direccion || clienteForm.direccion.trim().length < 5) e.direccion = 'Dirección obligatoria (mínimo 5 caracteres)'
+      if (!clienteForm.comuna || clienteForm.comuna.trim().length < 2) e.comuna = 'Comuna obligatoria'
     }
     if (!form.fecha) e.fecha = 'Selecciona una fecha'
     if (!form.hora_inicio) e.hora_inicio = 'Selecciona una hora'
@@ -172,7 +174,26 @@ export default function NuevaCitaPage() {
                 />
                 {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
               </div>
-              <input placeholder="Dirección" className="input-field" value={clienteForm.direccion} onChange={e=>setClienteForm({...clienteForm,direccion:e.target.value})} />
+              <div>
+                <input
+                  placeholder="Dirección (Ej: Av. Brasil 123)"
+                  className={`input-field ${errors.direccion ? 'border-red-400' : ''}`}
+                  value={clienteForm.direccion}
+                  onChange={e=>{ setClienteForm({...clienteForm,direccion:e.target.value}); setErrors({...errors,direccion:''}) }}
+                  required
+                />
+                {errors.direccion && <p className="text-red-500 text-xs mt-1">{errors.direccion}</p>}
+              </div>
+              <div>
+                <input
+                  placeholder="Comuna (Ej: Valparaíso)"
+                  className={`input-field ${errors.comuna ? 'border-red-400' : ''}`}
+                  value={clienteForm.comuna}
+                  onChange={e=>{ setClienteForm({...clienteForm,comuna:e.target.value}); setErrors({...errors,comuna:''}) }}
+                  required
+                />
+                {errors.comuna && <p className="text-red-500 text-xs mt-1">{errors.comuna}</p>}
+              </div>
             </div>
           ) : (
             <select className="input-field" value={form.cliente_id} onChange={e => setForm({...form,cliente_id:e.target.value})} required>

@@ -1,68 +1,71 @@
 import { useEffect, useState } from 'react'
-import { FiScissors, FiCheck, FiArrowLeft, FiArrowRight, FiClock } from 'react-icons/fi'
-import toast, { Toaster } from 'react-hot-toast'
-import { getBarberos, getServicios, getDisponibilidad, createCita, createCliente, getClientes } from '../services/api'
-import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
+import toast from 'react-hot-toast'
+import { getBarberos, getServicios, createReservaPublica } from '../services/api'
 
-const PASOS = ['Barbero', 'Servicio', 'Fecha y Hora', 'Tus datos', 'Confirmar']
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const TEL_RE = /^\+\d{7,15}$/
+const SLOT_MIN = 45
+
+function generarBloques() {
+  const bloques = []
+  let h = 9 * 60
+  while (h + SLOT_MIN <= 19 * 60) {
+    const hh = String(Math.floor(h / 60)).padStart(2, '0')
+    const mm = String(h % 60).padStart(2, '0')
+    bloques.push(`${hh}:${mm}`)
+    h += SLOT_MIN
+  }
+  return bloques
+}
+
+const BLOQUES = generarBloques()
+const today = new Date().toISOString().split('T')[0]
 
 export default function ReservaPublicaPage() {
-  const [paso, setPaso] = useState(0)
+  const [step, setStep] = useState(1)
   const [barberos, setBarberos] = useState([])
   const [servicios, setServicios] = useState([])
-  const [bloques, setBloques] = useState([])
-  const [loadingBloques, setLoadingBloques] = useState(false)
-  const [confirmado, setConfirmado] = useState(false)
-  const [sel, setSel] = useState({ barbero: null, servicio: null, fecha: '', hora: '' })
-  const [clienteForm, setClienteForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'' })
-  const [errores, setErrores] = useState({})
+  const [selected, setSelected] = useState({ barbero_id:'', servicios_ids:[], fecha:'', hora_inicio:'' })
+  const [datos, setDatos] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'', comuna:'' })
+  const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
 
   useEffect(() => {
-    getBarberos().then(r => setBarberos(r.data))
-    getServicios().then(r => setServicios(r.data))
+    Promise.all([getBarberos(), getServicios()]).then(([b, s]) => {
+      setBarberos(b.data)
+      setServicios(s.data)
+    })
   }, [])
 
-  useEffect(() => {
-    if (sel.barbero && sel.fecha) {
-      setLoadingBloques(true)
-      getDisponibilidad(sel.barbero.id, sel.fecha).then(r => setBloques(r.data.bloques || [])).finally(() => setLoadingBloques(false))
-    }
-  }, [sel.barbero, sel.fecha])
+  const bloquesDisponibles = () => {
+    const ahora = new Date()
+    return BLOQUES.filter(bloque => {
+      if (selected.fecha === today) {
+        const [hh, mm] = bloque.split(':').map(Number)
+        const d = new Date(); d.setHours(hh, mm, 0, 0)
+        return d > ahora
+      }
+      return true
+    })
+  }
 
-  const siguiente = () => setPaso(p => Math.min(p + 1, PASOS.length - 1))
-  const anterior = () => setPaso(p => Math.max(p - 1, 0))
-
-  const validarDatos = () => {
+  const validateDatos = () => {
     const e = {}
-    if (!EMAIL_RE.test(clienteForm.email)) e.email = 'Email inválido (ej: nombre@dominio.cl)'
-    if (clienteForm.telefono && !TEL_RE.test(clienteForm.telefono)) e.telefono = 'Teléfono inválido (ej: +56912345678)'
-    if (!clienteForm.direccion || clienteForm.direccion.trim().length < 5) e.direccion = 'Ingresa una dirección válida (mín. 5 caracteres)'
-    setErrores(e)
+    if (!EMAIL_RE.test(datos.email)) e.email = 'Email inválido (ej: nombre@dominio.cl)'
+    if (!TEL_RE.test(datos.telefono)) e.telefono = 'Teléfono inválido (ej: +56912345678)'
+    if (!datos.direccion || datos.direccion.trim().length < 5) e.direccion = 'Dirección obligatoria (mínimo 5 caracteres)'
+    if (!datos.comuna || datos.comuna.trim().length < 2) e.comuna = 'Comuna obligatoria'
+    setErrors(e)
     return Object.keys(e).length === 0
   }
 
-  const irSiguienteDatos = () => {
-    if (validarDatos()) siguiente()
-  }
-
-  const confirmar = async () => {
-    if (!validarDatos()) return
+  const handleSubmit = async () => {
+    if (!validateDatos()) return
     setLoading(true)
     try {
-      let clienteId
-      try {
-        const existing = await getClientes()
-        const found = existing.data.find(c => c.email === clienteForm.email)
-        clienteId = found ? found.id : (await createCliente(clienteForm)).data.id
-      } catch {
-        clienteId = (await createCliente(clienteForm)).data.id
-      }
-      await createCita({ cliente_id: clienteId, barbero_id: sel.barbero.id, servicio_id: sel.servicio.id, fecha: sel.fecha, hora_inicio: sel.hora })
-      setConfirmado(true)
+      await createReservaPublica({ ...selected, ...datos })
+      setDone(true)
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al reservar')
     } finally {
@@ -70,224 +73,160 @@ export default function ReservaPublicaPage() {
     }
   }
 
-  if (confirmado) {
-    return (
-      <div className="min-h-screen bg-dark-900 flex items-center justify-center p-4">
-        <div className="text-center max-w-md">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <FiCheck className="text-4xl text-green-600" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-3">¡Reserva confirmada!</h1>
-          <p className="text-gray-500 mb-2">Tu cita ha sido agendada exitosamente.</p>
-          <div className="bg-white border border-dark-600 rounded-2xl p-5 mt-6 text-left space-y-3 shadow-sm">
-            {[
-              ['Barbero', `${sel.barbero?.nombre} ${sel.barbero?.apellido}`],
-              ['Servicio', sel.servicio?.nombre],
-              ['Fecha', sel.fecha ? format(new Date(sel.fecha + 'T12:00'), "EEEE d 'de' MMMM", { locale: es }) : ''],
-              ['Hora', sel.hora],
-            ].map(([k,v]) => (
-              <p key={k} className="text-gray-500 text-sm">{k}: <span className="text-gray-800 font-medium">{v}</span></p>
-            ))}
-          </div>
-          <button onClick={() => { setConfirmado(false); setPaso(0); setSel({barbero:null,servicio:null,fecha:'',hora:''}); setClienteForm({nombre:'',apellido:'',email:'',telefono:'',direccion:''}) }}
-            className="btn-primary mt-8 mx-auto">
-            Nueva reserva
-          </button>
-        </div>
+  if (done) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center p-8">
+        <div className="text-6xl mb-4">✅</div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">¡Reserva confirmada!</h2>
+        <p className="text-gray-500">Te esperamos en Barbería Krono.</p>
       </div>
-    )
-  }
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-dark-900">
-      <Toaster position="top-right" toastOptions={{ style: { background: '#fff', color: '#1e293b', border: '1px solid #e2e8f0' }}} />
-      <div className="bg-krono-800 px-6 py-5 shadow-md">
-        <div className="max-w-2xl mx-auto flex items-center gap-4">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-            <FiScissors className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-white font-black text-xl">KRONO Barbería</h1>
-            <p className="text-krono-200 text-sm">Reserva tu cita online</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-2xl mx-auto px-6 pt-8">
-        {/* Stepper */}
-        <div className="flex items-center justify-between mb-8">
-          {PASOS.map((p, i) => (
-            <div key={p} className="flex items-center">
-              <div className="flex flex-col items-center gap-1">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                  i < paso ? 'bg-krono-600 text-white' :
-                  i === paso ? 'bg-krono-600 text-white ring-4 ring-krono-200' :
-                  'bg-dark-600 text-gray-400 border border-dark-500'
-                }`}>
-                  {i < paso ? <FiCheck /> : i + 1}
-                </div>
-                <span className={`text-xs hidden sm:block ${ i === paso ? 'text-krono-600 font-medium' : 'text-gray-400'}`}>{p}</span>
-              </div>
-              {i < PASOS.length - 1 && <div className={`h-0.5 w-8 sm:w-12 mx-1 sm:mx-2 ${ i < paso ? 'bg-krono-500' : 'bg-dark-500'}`} />}
-            </div>
-          ))}
+    <div className="min-h-screen bg-gray-50 py-10 px-4">
+      <div className="max-w-lg mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800">✂️ Barbería Krono</h1>
+          <p className="text-gray-500 mt-1">Reserva tu cita en línea</p>
         </div>
 
-        <div className="card min-h-[300px]">
-          {paso === 0 && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-800 mb-1">Elige tu barbero</h2>
-              <p className="text-gray-500 text-sm mb-5">Selecciona con quién quieres atenderte</p>
-              <div className="grid grid-cols-1 gap-3">
-                {barberos.map(b => (
-                  <button key={b.id} onClick={() => { setSel(s=>({...s,barbero:b})); siguiente() }}
-                    className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
-                      sel.barbero?.id === b.id ? 'border-krono-500 bg-krono-50' : 'border-dark-500 hover:border-krono-300 bg-white'
-                    }`}>
-                    <div className="w-12 h-12 bg-krono-100 rounded-xl flex items-center justify-center text-krono-700 font-bold text-lg">{b.nombre[0]}{b.apellido[0]}</div>
-                    <div>
-                      <p className="text-gray-800 font-semibold">{b.nombre} {b.apellido}</p>
-                      <p className="text-gray-400 text-sm">Barbero profesional</p>
-                    </div>
-                    {sel.barbero?.id === b.id && <FiCheck className="ml-auto text-krono-600 text-xl" />}
-                  </button>
-                ))}
+        {/* Paso 1: Barbero */}
+        {step === 1 && (
+          <div className="bg-white rounded-2xl shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Paso 1: Elige tu barbero</h2>
+            <div className="space-y-3">
+              {barberos.map(b => (
+                <button key={b.id} onClick={() => { setSelected({...selected, barbero_id: b.id}); setStep(2) }}
+                  className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                    selected.barbero_id === b.id ? 'border-krono-500 bg-krono-50' : 'border-gray-200 hover:border-krono-300'
+                  }`}>
+                  <p className="font-medium">{b.nombre} {b.apellido}</p>
+                  {b.especialidad && <p className="text-sm text-gray-500">{b.especialidad}</p>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Paso 2: Servicios */}
+        {step === 2 && (
+          <div className="bg-white rounded-2xl shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Paso 2: Elige tu servicio</h2>
+            <div className="space-y-3">
+              {servicios.map(s => (
+                <button key={s.id} onClick={() => setSelected({...selected, servicios_ids: [s.id]})}
+                  className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                    selected.servicios_ids.includes(s.id) ? 'border-krono-500 bg-krono-50' : 'border-gray-200 hover:border-krono-300'
+                  }`}>
+                  <p className="font-medium">{s.nombre}</p>
+                  <p className="text-sm text-gray-500">{s.duracion_minutos} min — ${Number(s.precio).toLocaleString('es-CL')}</p>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setStep(1)} className="flex-1 py-2 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50">Anterior</button>
+              <button onClick={() => { if (selected.servicios_ids.length > 0) setStep(3); else toast.error('Selecciona un servicio') }}
+                className="flex-1 py-2 rounded-xl bg-krono-600 text-white font-medium hover:bg-krono-700">Siguiente</button>
+            </div>
+          </div>
+        )}
+
+        {/* Paso 3: Fecha y hora */}
+        {step === 3 && (
+          <div className="bg-white rounded-2xl shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Paso 3: Fecha y hora</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Fecha</label>
+                <input type="date" min={today} className="w-full border border-gray-300 rounded-xl px-3 py-2"
+                  value={selected.fecha} onChange={e => setSelected({...selected, fecha: e.target.value, hora_inicio: ''})} />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Hora</label>
+                <select className="w-full border border-gray-300 rounded-xl px-3 py-2"
+                  value={selected.hora_inicio} onChange={e => setSelected({...selected, hora_inicio: e.target.value})} disabled={!selected.fecha}>
+                  <option value="">Selecciona hora...</option>
+                  {bloquesDisponibles().map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
               </div>
             </div>
-          )}
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setStep(2)} className="flex-1 py-2 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50">Anterior</button>
+              <button onClick={() => { if (selected.fecha && selected.hora_inicio) setStep(4); else toast.error('Completa fecha y hora') }}
+                className="flex-1 py-2 rounded-xl bg-krono-600 text-white font-medium hover:bg-krono-700">Siguiente</button>
+            </div>
+          </div>
+        )}
 
-          {paso === 1 && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-800 mb-1">Elige el servicio</h2>
-              <p className="text-gray-500 text-sm mb-5">¿Qué te vamos a hacer hoy?</p>
-              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                {servicios.map(s => (
-                  <button key={s.id} onClick={() => { setSel(sv=>({...sv,servicio:s})); siguiente() }}
-                    className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all text-left ${
-                      sel.servicio?.id === s.id ? 'border-krono-500 bg-krono-50' : 'border-dark-500 hover:border-krono-300 bg-white'
-                    }`}>
-                    <div>
-                      <p className="text-gray-800 font-medium">{s.nombre}</p>
-                      {s.descripcion && <p className="text-gray-400 text-xs mt-0.5">{s.descripcion}</p>}
-                      <p className="text-gray-500 text-sm mt-1"><FiClock className="inline text-xs mr-1"/>{s.duracion_minutos} min</p>
-                    </div>
-                    <p className="text-krono-600 font-bold text-lg">${Number(s.precio).toLocaleString('es-CL')}</p>
-                  </button>
-                ))}
+        {/* Paso 4: Datos personales */}
+        {step === 4 && (
+          <div className="bg-white rounded-2xl shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Paso 4: Tus datos</h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-1">Nombre</label>
+                  <input className="w-full border border-gray-300 rounded-xl px-3 py-2" value={datos.nombre} onChange={e=>setDatos({...datos,nombre:e.target.value})} required />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-1">Apellido</label>
+                  <input className="w-full border border-gray-300 rounded-xl px-3 py-2" value={datos.apellido} onChange={e=>setDatos({...datos,apellido:e.target.value})} required />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Email</label>
+                <input type="email" className={`w-full border rounded-xl px-3 py-2 ${errors.email ? 'border-red-400' : 'border-gray-300'}`}
+                  value={datos.email} onChange={e=>{ setDatos({...datos,email:e.target.value}); setErrors({...errors,email:''}) }} />
+                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Teléfono</label>
+                <input placeholder="+56912345678" className={`w-full border rounded-xl px-3 py-2 ${errors.telefono ? 'border-red-400' : 'border-gray-300'}`}
+                  value={datos.telefono} onChange={e=>{ setDatos({...datos,telefono:e.target.value}); setErrors({...errors,telefono:''}) }} />
+                {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Dirección</label>
+                <input placeholder="Ej: Av. Brasil 123" className={`w-full border rounded-xl px-3 py-2 ${errors.direccion ? 'border-red-400' : 'border-gray-300'}`}
+                  value={datos.direccion} onChange={e=>{ setDatos({...datos,direccion:e.target.value}); setErrors({...errors,direccion:''}) }} />
+                {errors.direccion && <p className="text-red-500 text-xs mt-1">{errors.direccion}</p>}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Comuna</label>
+                <input placeholder="Ej: Valparaíso" className={`w-full border rounded-xl px-3 py-2 ${errors.comuna ? 'border-red-400' : 'border-gray-300'}`}
+                  value={datos.comuna} onChange={e=>{ setDatos({...datos,comuna:e.target.value}); setErrors({...errors,comuna:''}) }} />
+                {errors.comuna && <p className="text-red-500 text-xs mt-1">{errors.comuna}</p>}
               </div>
             </div>
-          )}
-
-          {paso === 2 && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-800 mb-1">Elige fecha y hora</h2>
-              <p className="text-gray-500 text-sm mb-5">Selecciona un día y hora disponible</p>
-              <div className="mb-4">
-                <label className="label">Fecha</label>
-                <input type="date" className="input-field" value={sel.fecha} min={format(new Date(), 'yyyy-MM-dd')} onChange={e => setSel(s=>({...s,fecha:e.target.value,hora:''}))} />
-              </div>
-              {sel.fecha && (
-                <div>
-                  <label className="label">Hora disponible</label>
-                  {loadingBloques ? (
-                    <p className="text-gray-400 text-sm">Cargando disponibilidad...</p>
-                  ) : bloques.length === 0 ? (
-                    <p className="text-gray-400 text-sm">El barbero no atiende ese día</p>
-                  ) : (
-                    <div className="grid grid-cols-4 gap-2">
-                      {bloques.filter(b => !b.ocupado).map(b => (
-                        <button key={b.hora} onClick={() => setSel(s=>({...s,hora:b.hora}))}
-                          className={`py-2 rounded-xl text-sm font-medium border-2 transition-all ${
-                            sel.hora === b.hora ? 'border-krono-500 bg-krono-50 text-krono-700' : 'border-dark-500 bg-white text-gray-600 hover:border-krono-400'
-                          }`}>
-                          {b.hora}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setStep(3)} className="flex-1 py-2 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50">Anterior</button>
+              <button onClick={() => { if (datos.nombre && datos.apellido) setStep(5); else toast.error('Completa nombre y apellido') }}
+                className="flex-1 py-2 rounded-xl bg-krono-600 text-white font-medium hover:bg-krono-700">Revisar</button>
             </div>
-          )}
+          </div>
+        )}
 
-          {paso === 3 && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-800 mb-1">Tus datos</h2>
-              <p className="text-gray-500 text-sm mb-5">Para confirmar tu reserva necesitamos tu información</p>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="label">Nombre</label><input className="input-field" value={clienteForm.nombre} onChange={e=>setClienteForm({...clienteForm,nombre:e.target.value})} required /></div>
-                  <div><label className="label">Apellido</label><input className="input-field" value={clienteForm.apellido} onChange={e=>setClienteForm({...clienteForm,apellido:e.target.value})} required /></div>
-                </div>
-                <div>
-                  <label className="label">Email</label>
-                  <input
-                    type="email"
-                    className={`input-field ${errores.email ? 'border-red-400' : ''}`}
-                    value={clienteForm.email}
-                    onChange={e=>{ setClienteForm({...clienteForm,email:e.target.value}); setErrores({...errores,email:''}) }}
-                    required
-                  />
-                  {errores.email && <p className="text-red-500 text-xs mt-1">{errores.email}</p>}
-                </div>
-                <div>
-                  <label className="label">Teléfono</label>
-                  <input
-                    className={`input-field ${errores.telefono ? 'border-red-400' : ''}`}
-                    placeholder="Ej: +56912345678"
-                    value={clienteForm.telefono}
-                    onChange={e=>{ setClienteForm({...clienteForm,telefono:e.target.value}); setErrores({...errores,telefono:''}) }}
-                  />
-                  {errores.telefono && <p className="text-red-500 text-xs mt-1">{errores.telefono}</p>}
-                </div>
-                <div>
-                  <label className="label">Dirección</label>
-                  <input
-                    className={`input-field ${errores.direccion ? 'border-red-400' : ''}`}
-                    placeholder="Ej: Av. Brasil 123, Valparaíso"
-                    value={clienteForm.direccion}
-                    onChange={e=>{ setClienteForm({...clienteForm,direccion:e.target.value}); setErrores({...errores,direccion:''}) }}
-                  />
-                  {errores.direccion && <p className="text-red-500 text-xs mt-1">{errores.direccion}</p>}
-                </div>
-              </div>
+        {/* Paso 5: Confirmar */}
+        {step === 5 && (
+          <div className="bg-white rounded-2xl shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Paso 5: Confirmar reserva</h2>
+            <div className="space-y-2 text-sm text-gray-700 bg-gray-50 rounded-xl p-4">
+              <p><span className="font-medium">Barbero:</span> {barberos.find(b=>b.id===selected.barbero_id)?.nombre}</p>
+              <p><span className="font-medium">Servicio:</span> {servicios.find(s=>selected.servicios_ids.includes(s.id))?.nombre}</p>
+              <p><span className="font-medium">Fecha:</span> {selected.fecha}</p>
+              <p><span className="font-medium">Hora:</span> {selected.hora_inicio}</p>
+              <p><span className="font-medium">Cliente:</span> {datos.nombre} {datos.apellido}</p>
+              <p><span className="font-medium">Email:</span> {datos.email}</p>
+              <p><span className="font-medium">Dirección:</span> {datos.direccion}{datos.comuna ? `, ${datos.comuna}` : ''}</p>
             </div>
-          )}
-
-          {paso === 4 && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-800 mb-1">Confirma tu reserva</h2>
-              <p className="text-gray-500 text-sm mb-5">Revisa los detalles antes de confirmar</p>
-              <div className="space-y-3">
-                {[
-                  ['Barbero', `${sel.barbero?.nombre} ${sel.barbero?.apellido}`],
-                  ['Servicio', sel.servicio?.nombre],
-                  ['Duración', `${sel.servicio?.duracion_minutos} minutos`],
-                  ['Precio', `$${Number(sel.servicio?.precio||0).toLocaleString('es-CL')}`],
-                  ['Fecha', sel.fecha ? format(new Date(sel.fecha+'T12:00'),"EEEE d 'de' MMMM yyyy",{locale:es}) : ''],
-                  ['Hora', sel.hora],
-                  ['Cliente', `${clienteForm.nombre} ${clienteForm.apellido}`],
-                  ['Email', clienteForm.email],
-                ].map(([k,v]) => (
-                  <div key={k} className="flex justify-between py-2 border-b border-dark-600">
-                    <span className="text-gray-500 text-sm">{k}</span>
-                    <span className="text-gray-800 font-medium text-sm">{v}</span>
-                  </div>
-                ))}
-              </div>
-              <button onClick={confirmar} disabled={loading} className="btn-primary w-full justify-center mt-6 py-4 text-base">
-                {loading ? 'Confirmando...' : '✂️ Confirmar Reserva'}
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setStep(4)} className="flex-1 py-2 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50">Anterior</button>
+              <button onClick={handleSubmit} disabled={loading}
+                className="flex-1 py-2 rounded-xl bg-krono-600 text-white font-medium hover:bg-krono-700 disabled:opacity-60">
+                {loading ? 'Reservando...' : '✅ Confirmar Reserva'}
               </button>
             </div>
-          )}
-        </div>
-
-        {/* Botones de navegación — solo un botón Anterior por paso */}
-        {paso > 0 && paso < PASOS.length - 1 && (
-          <div className="flex justify-between mt-4">
-            <button onClick={anterior} className="btn-secondary"><FiArrowLeft /> Anterior</button>
-            {paso === 2 && sel.hora && <button onClick={siguiente} className="btn-primary">Siguiente <FiArrowRight /></button>}
-            {paso === 3 && clienteForm.nombre && clienteForm.apellido && <button onClick={irSiguienteDatos} className="btn-primary">Revisar <FiArrowRight /></button>}
           </div>
         )}
       </div>

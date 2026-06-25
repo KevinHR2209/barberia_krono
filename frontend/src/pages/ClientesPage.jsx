@@ -10,7 +10,7 @@ const TEL_RE = /^\+\d{7,15}$/
 export default function ClientesPage() {
   const [clientes, setClientes] = useState([])
   const [modalOpen, setModalOpen] = useState(false)
-  const [form, setForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'' })
+  const [form, setForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'', comuna:'' })
   const [errors, setErrors] = useState({})
   const [search, setSearch] = useState('')
 
@@ -21,6 +21,8 @@ export default function ClientesPage() {
     const e = {}
     if (!EMAIL_RE.test(form.email)) e.email = 'Email inválido (ej: nombre@dominio.cl)'
     if (form.telefono && !TEL_RE.test(form.telefono)) e.telefono = 'Teléfono inválido (ej: +56912345678)'
+    if (!form.direccion || form.direccion.trim().length < 5) e.direccion = 'Dirección obligatoria (mínimo 5 caracteres)'
+    if (!form.comuna || form.comuna.trim().length < 2) e.comuna = 'Comuna obligatoria'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -32,7 +34,7 @@ export default function ClientesPage() {
       await createCliente(form)
       toast.success('Cliente registrado')
       setModalOpen(false)
-      setForm({ nombre:'', apellido:'', email:'', telefono:'', direccion:'' })
+      setForm({ nombre:'', apellido:'', email:'', telefono:'', direccion:'', comuna:'' })
       setErrors({})
       cargar()
     } catch (err) {
@@ -73,7 +75,7 @@ export default function ClientesPage() {
               <h3 className="text-gray-800 font-semibold">{c.nombre} {c.apellido}</h3>
               <p className="text-gray-500 text-sm flex items-center gap-1 mt-1"><FiMail className="text-xs"/> {c.email}</p>
               {c.telefono && <p className="text-gray-400 text-xs flex items-center gap-1 mt-0.5"><FiPhone className="text-xs"/> {c.telefono}</p>}
-              {c.direccion && <p className="text-gray-400 text-xs flex items-center gap-1 mt-0.5"><FiMapPin className="text-xs"/> {c.direccion}</p>}
+              {c.direccion && <p className="text-gray-400 text-xs flex items-center gap-1 mt-0.5"><FiMapPin className="text-xs"/> {c.direccion}{c.comuna ? `, ${c.comuna}` : ''}</p>}
             </div>
             <button onClick={() => eliminar(c.id)} className="p-2 bg-dark-700 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all border border-dark-600" title="Desactivar cliente">
               <FiTrash2 />
@@ -108,7 +110,28 @@ export default function ClientesPage() {
             />
             {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
           </div>
-          <div><label className="label">Dirección</label><input className="input-field" placeholder="Ej: Av. Brasil 123, Valparaíso" value={form.direccion} onChange={e=>setForm({...form,direccion:e.target.value})} /></div>
+          <div>
+            <label className="label">Dirección</label>
+            <input
+              className={`input-field ${errors.direccion ? 'border-red-400' : ''}`}
+              placeholder="Ej: Av. Brasil 123"
+              value={form.direccion}
+              onChange={e=>{ setForm({...form,direccion:e.target.value}); setErrors({...errors,direccion:''}) }}
+              required
+            />
+            {errors.direccion && <p className="text-red-500 text-xs mt-1">{errors.direccion}</p>}
+          </div>
+          <div>
+            <label className="label">Comuna</label>
+            <input
+              className={`input-field ${errors.comuna ? 'border-red-400' : ''}`}
+              placeholder="Ej: Valparaíso"
+              value={form.comuna}
+              onChange={e=>{ setForm({...form,comuna:e.target.value}); setErrors({...errors,comuna:''}) }}
+              required
+            />
+            {errors.comuna && <p className="text-red-500 text-xs mt-1">{errors.comuna}</p>}
+          </div>
           <button type="submit" className="btn-primary w-full justify-center">Registrar Cliente</button>
         </form>
       </Modal>
