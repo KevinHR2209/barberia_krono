@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[ClienteOut])
 def listar_clientes(db: Session = Depends(get_db)):
-    return db.query(Cliente).all()
+    return db.query(Cliente).filter(Cliente.activo == True).all()
 
 
 @router.post("/", response_model=ClienteOut, status_code=201)
@@ -26,7 +26,7 @@ def crear_cliente(data: ClienteCreate, db: Session = Depends(get_db)):
 
 @router.get("/{cliente_id}", response_model=ClienteOut)
 def obtener_cliente(cliente_id: UUID, db: Session = Depends(get_db)):
-    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id, Cliente.activo == True).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     return cliente
@@ -34,7 +34,7 @@ def obtener_cliente(cliente_id: UUID, db: Session = Depends(get_db)):
 
 @router.patch("/{cliente_id}", response_model=ClienteOut)
 def actualizar_cliente(cliente_id: UUID, data: ClienteUpdate, db: Session = Depends(get_db)):
-    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id, Cliente.activo == True).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     for key, value in data.model_dump(exclude_none=True).items():
@@ -49,5 +49,5 @@ def eliminar_cliente(cliente_id: UUID, db: Session = Depends(get_db)):
     cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    db.delete(cliente)
+    cliente.activo = False
     db.commit()

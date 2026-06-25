@@ -6,6 +6,8 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 const PASOS = ['Barbero', 'Servicio', 'Fecha y Hora', 'Tus datos', 'Confirmar']
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const TEL_RE = /^\+\d{7,15}$/
 
 export default function ReservaPublicaPage() {
   const [paso, setPaso] = useState(0)
@@ -16,6 +18,7 @@ export default function ReservaPublicaPage() {
   const [confirmado, setConfirmado] = useState(false)
   const [sel, setSel] = useState({ barbero: null, servicio: null, fecha: '', hora: '' })
   const [clienteForm, setClienteForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'' })
+  const [errores, setErrores] = useState({})
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -33,7 +36,21 @@ export default function ReservaPublicaPage() {
   const siguiente = () => setPaso(p => Math.min(p + 1, PASOS.length - 1))
   const anterior = () => setPaso(p => Math.max(p - 1, 0))
 
+  const validarDatos = () => {
+    const e = {}
+    if (!EMAIL_RE.test(clienteForm.email)) e.email = 'Email inválido (ej: nombre@dominio.cl)'
+    if (clienteForm.telefono && !TEL_RE.test(clienteForm.telefono)) e.telefono = 'Teléfono inválido (ej: +56912345678)'
+    if (!clienteForm.direccion || clienteForm.direccion.trim().length < 5) e.direccion = 'Ingresa una dirección válida (mín. 5 caracteres)'
+    setErrores(e)
+    return Object.keys(e).length === 0
+  }
+
+  const irSiguienteDatos = () => {
+    if (validarDatos()) siguiente()
+  }
+
   const confirmar = async () => {
+    if (!validarDatos()) return
     setLoading(true)
     try {
       let clienteId
@@ -202,9 +219,37 @@ export default function ReservaPublicaPage() {
                   <div><label className="label">Nombre</label><input className="input-field" value={clienteForm.nombre} onChange={e=>setClienteForm({...clienteForm,nombre:e.target.value})} required /></div>
                   <div><label className="label">Apellido</label><input className="input-field" value={clienteForm.apellido} onChange={e=>setClienteForm({...clienteForm,apellido:e.target.value})} required /></div>
                 </div>
-                <div><label className="label">Email</label><input type="email" className="input-field" value={clienteForm.email} onChange={e=>setClienteForm({...clienteForm,email:e.target.value})} required /></div>
-                <div><label className="label">Teléfono</label><input className="input-field" value={clienteForm.telefono} onChange={e=>setClienteForm({...clienteForm,telefono:e.target.value})} /></div>
-                <div><label className="label">Dirección</label><input className="input-field" placeholder="Ej: Av. Brasil 123, Valparaíso" value={clienteForm.direccion} onChange={e=>setClienteForm({...clienteForm,direccion:e.target.value})} /></div>
+                <div>
+                  <label className="label">Email</label>
+                  <input
+                    type="email"
+                    className={`input-field ${errores.email ? 'border-red-400' : ''}`}
+                    value={clienteForm.email}
+                    onChange={e=>{ setClienteForm({...clienteForm,email:e.target.value}); setErrores({...errores,email:''}) }}
+                    required
+                  />
+                  {errores.email && <p className="text-red-500 text-xs mt-1">{errores.email}</p>}
+                </div>
+                <div>
+                  <label className="label">Teléfono</label>
+                  <input
+                    className={`input-field ${errores.telefono ? 'border-red-400' : ''}`}
+                    placeholder="Ej: +56912345678"
+                    value={clienteForm.telefono}
+                    onChange={e=>{ setClienteForm({...clienteForm,telefono:e.target.value}); setErrores({...errores,telefono:''}) }}
+                  />
+                  {errores.telefono && <p className="text-red-500 text-xs mt-1">{errores.telefono}</p>}
+                </div>
+                <div>
+                  <label className="label">Dirección</label>
+                  <input
+                    className={`input-field ${errores.direccion ? 'border-red-400' : ''}`}
+                    placeholder="Ej: Av. Brasil 123, Valparaíso"
+                    value={clienteForm.direccion}
+                    onChange={e=>{ setClienteForm({...clienteForm,direccion:e.target.value}); setErrores({...errores,direccion:''}) }}
+                  />
+                  {errores.direccion && <p className="text-red-500 text-xs mt-1">{errores.direccion}</p>}
+                </div>
               </div>
             </div>
           )}
@@ -237,14 +282,14 @@ export default function ReservaPublicaPage() {
           )}
         </div>
 
+        {/* Botones de navegación — solo un botón Anterior por paso */}
         {paso > 0 && paso < PASOS.length - 1 && (
           <div className="flex justify-between mt-4">
             <button onClick={anterior} className="btn-secondary"><FiArrowLeft /> Anterior</button>
             {paso === 2 && sel.hora && <button onClick={siguiente} className="btn-primary">Siguiente <FiArrowRight /></button>}
-            {paso === 3 && clienteForm.nombre && clienteForm.email && <button onClick={siguiente} className="btn-primary">Revisar <FiArrowRight /></button>}
+            {paso === 3 && clienteForm.nombre && clienteForm.apellido && <button onClick={irSiguienteDatos} className="btn-primary">Revisar <FiArrowRight /></button>}
           </div>
         )}
-        {paso === 1 && <button onClick={anterior} className="btn-secondary mt-4"><FiArrowLeft /> Anterior</button>}
       </div>
     </div>
   )

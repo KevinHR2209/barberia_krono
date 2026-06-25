@@ -5,6 +5,23 @@ import { FiArrowLeft } from 'react-icons/fi'
 import { getBarberos, getClientes, getServicios, createCita, createCliente, getHorariosBarbero } from '../services/api'
 
 const DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const TEL_RE = /^\+\d{7,15}$/
+const SLOT_MIN = 45
+
+function generarBloques() {
+  const bloques = []
+  let h = 9 * 60
+  while (h + SLOT_MIN <= 19 * 60) {
+    const hh = String(Math.floor(h / 60)).padStart(2, '0')
+    const mm = String(h % 60).padStart(2, '0')
+    bloques.push(`${hh}:${mm}`)
+    h += SLOT_MIN
+  }
+  return bloques
+}
+
+const BLOQUES = generarBloques()
 
 export default function NuevaCitaPage() {
   const navigate = useNavigate()
@@ -15,7 +32,10 @@ export default function NuevaCitaPage() {
   const [nuevoCliente, setNuevoCliente] = useState(false)
   const [form, setForm] = useState({ cliente_id:'', barbero_id:'', servicio_id:'', fecha:'', hora_inicio:'', notas:'' })
   const [clienteForm, setClienteForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'' })
+  const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+
+  const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => {
     Promise.all([getBarberos(), getClientes(), getServicios()])
@@ -26,8 +46,34 @@ export default function NuevaCitaPage() {
     if (form.barbero_id) getHorariosBarbero(form.barbero_id).then(r => setHorarios(r.data))
   }, [form.barbero_id])
 
+  const bloquesDisponibles = () => {
+    const ahora = new Date()
+    return BLOQUES.filter(bloque => {
+      if (form.fecha === today) {
+        const [hh, mm] = bloque.split(':').map(Number)
+        const bloqueDate = new Date()
+        bloqueDate.setHours(hh, mm, 0, 0)
+        return bloqueDate > ahora
+      }
+      return true
+    })
+  }
+
+  const validate = () => {
+    const e = {}
+    if (nuevoCliente) {
+      if (clienteForm.email && !EMAIL_RE.test(clienteForm.email)) e.email = 'Email inválido (ej: nombre@dominio.cl)'
+      if (clienteForm.telefono && !TEL_RE.test(clienteForm.telefono)) e.telefono = 'Teléfono inválido (ej: +56912345678)'
+    }
+    if (!form.fecha) e.fecha = 'Selecciona una fecha'
+    if (!form.hora_inicio) e.hora_inicio = 'Selecciona una hora'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!validate()) return
     setLoading(true)
     try {
       let clienteId = form.cliente_id
@@ -52,7 +98,7 @@ export default function NuevaCitaPage() {
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label className="label">Barbero</label>
-          <select className="input-field" value={form.barbero_id} onChange={e => setForm({...form,barbero_id:e.target.value})} required>
+          <select className="input-field" value={form.barbero_id} onChange={e => setForm({...form, barbero_id:e.target.value, hora_inicio:''})} required>
             <option value="">Selecciona un barbero...</option>
             {barberos.map(b => <option key={b.id} value={b.id}>{b.nombre} {b.apellido}</option>)}
           </select>
@@ -66,8 +112,32 @@ export default function NuevaCitaPage() {
           </select>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div><label className="label">Fecha</label><input type="date" className="input-field" value={form.fecha} onChange={e => setForm({...form,fecha:e.target.value})} required /></div>
-          <div><label className="label">Hora inicio</label><input type="time" className="input-field" value={form.hora_inicio} onChange={e => setForm({...form,hora_inicio:e.target.value})} required /></div>
+          <div>
+            <label className="label">Fecha</label>
+            <input
+              type="date"
+              className="input-field"
+              value={form.fecha}
+              min={today}
+              onChange={e => setForm({...form, fecha:e.target.value, hora_inicio:''})}
+              required
+            />
+            {errors.fecha && <p className="text-red-500 text-xs mt-1">{errors.fecha}</p>}
+          </div>
+          <div>
+            <label className="label">Hora inicio</label>
+            <select
+              className="input-field"
+              value={form.hora_inicio}
+              onChange={e => setForm({...form, hora_inicio:e.target.value})}
+              required
+              disabled={!form.fecha}
+            >
+              <option value="">Selecciona hora...</option>
+              {bloquesDisponibles().map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            {errors.hora_inicio && <p className="text-red-500 text-xs mt-1">{errors.hora_inicio}</p>}
+          </div>
         </div>
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -82,8 +152,26 @@ export default function NuevaCitaPage() {
                 <input placeholder="Nombre" className="input-field" value={clienteForm.nombre} onChange={e=>setClienteForm({...clienteForm,nombre:e.target.value})} required />
                 <input placeholder="Apellido" className="input-field" value={clienteForm.apellido} onChange={e=>setClienteForm({...clienteForm,apellido:e.target.value})} required />
               </div>
-              <input type="email" placeholder="Email" className="input-field" value={clienteForm.email} onChange={e=>setClienteForm({...clienteForm,email:e.target.value})} required />
-              <input placeholder="Teléfono" className="input-field" value={clienteForm.telefono} onChange={e=>setClienteForm({...clienteForm,telefono:e.target.value})} />
+              <div>
+                <input
+                  type="email"
+                  placeholder="Email"
+                  className={`input-field ${errors.email ? 'border-red-400' : ''}`}
+                  value={clienteForm.email}
+                  onChange={e=>{ setClienteForm({...clienteForm,email:e.target.value}); setErrors({...errors,email:''}) }}
+                  required
+                />
+                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+              </div>
+              <div>
+                <input
+                  placeholder="Teléfono (ej: +56912345678)"
+                  className={`input-field ${errors.telefono ? 'border-red-400' : ''}`}
+                  value={clienteForm.telefono}
+                  onChange={e=>{ setClienteForm({...clienteForm,telefono:e.target.value}); setErrors({...errors,telefono:''}) }}
+                />
+                {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
+              </div>
               <input placeholder="Dirección" className="input-field" value={clienteForm.direccion} onChange={e=>setClienteForm({...clienteForm,direccion:e.target.value})} />
             </div>
           ) : (
