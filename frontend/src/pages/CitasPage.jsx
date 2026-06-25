@@ -15,9 +15,17 @@ export default function CitasPage() {
   }
   useEffect(() => { cargarCitas() }, [])
 
-  const cambiarEstado = async (id, estado) => {
+  const cambiarEstado = async (cita, estado) => {
+    if (estado === 'completada') {
+      const ahora = new Date()
+      const citaDateTime = new Date(`${cita.fecha}T${cita.hora_inicio}`)
+      if (citaDateTime > ahora) {
+        toast.error('No puedes marcar como realizada una cita que aún no ha ocurrido.')
+        return
+      }
+    }
     try {
-      await updateEstadoCita(id, estado)
+      await updateEstadoCita(cita.id, estado)
       toast.success(`Cita marcada como ${estado}`)
       cargarCitas()
     } catch {
@@ -80,11 +88,11 @@ export default function CitasPage() {
               </div>
               {cita.estado === 'asignada' && (
                 <div className="flex gap-2">
-                  <button onClick={() => cambiarEstado(cita.id, 'completada')}
+                  <button onClick={() => cambiarEstado(cita, 'completada')}
                     className="p-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg transition-all border border-green-200" title="Completar">
                     <FiCheck />
                   </button>
-                  <button onClick={() => cambiarEstado(cita.id, 'cancelada')}
+                  <button onClick={() => cambiarEstado(cita, 'cancelada')}
                     className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-all border border-red-200" title="Cancelar">
                     <FiX />
                   </button>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { FiPlus, FiTrash2 } from 'react-icons/fi'
+import { FiPlus } from 'react-icons/fi'
 import toast from 'react-hot-toast'
-import { getSillas, createSilla, updateSilla, deleteSilla } from '../services/api'
+import { getSillas, createSilla, updateSilla } from '../services/api'
 import Modal from '../components/Modal'
 
 export default function SillasPage() {
@@ -14,8 +14,13 @@ export default function SillasPage() {
 
   const guardar = async (e) => {
     e.preventDefault()
+    const num = parseInt(form.numero)
+    if (num < 1 || num > 20) {
+      toast.error('El número de silla debe estar entre 1 y 20')
+      return
+    }
     try {
-      await createSilla({ ...form, numero: parseInt(form.numero) })
+      await createSilla({ ...form, numero: num })
       toast.success('Silla creada')
       setModalOpen(false)
       setForm({ numero:'', descripcion:'' })
@@ -27,13 +32,7 @@ export default function SillasPage() {
 
   const toggleActiva = async (silla) => {
     await updateSilla(silla.id, { activa: !silla.activa })
-    cargar()
-  }
-
-  const eliminar = async (id) => {
-    if (!confirm('¿Eliminar esta silla?')) return
-    await deleteSilla(id)
-    toast.success('Silla eliminada')
+    toast.success(silla.activa ? 'Silla desactivada' : 'Silla activada')
     cargar()
   }
 
@@ -55,9 +54,6 @@ export default function SillasPage() {
               <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-bold ${ s.activa ? 'bg-krono-100 text-krono-700' : 'bg-dark-600 text-gray-400'}`}>
                 #{s.numero}
               </div>
-              <button onClick={() => eliminar(s.id)} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all">
-                <FiTrash2 />
-              </button>
             </div>
             {s.descripcion && <p className="text-gray-500 text-sm mt-3">{s.descripcion}</p>}
             <button onClick={() => toggleActiva(s)}
@@ -73,7 +69,10 @@ export default function SillasPage() {
       </div>
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nueva Silla">
         <form onSubmit={guardar} className="space-y-4">
-          <div><label className="label">Número de silla</label><input type="number" min="1" className="input-field" value={form.numero} onChange={e=>setForm({...form,numero:e.target.value})} required /></div>
+          <div>
+            <label className="label">Número de silla (1-20)</label>
+            <input type="number" min="1" max="20" className="input-field" value={form.numero} onChange={e=>setForm({...form,numero:e.target.value})} required />
+          </div>
           <div><label className="label">Descripción</label><input className="input-field" placeholder="Ej: Silla junto a la ventana" value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})} /></div>
           <button type="submit" className="btn-primary w-full justify-center">Crear Silla</button>
         </form>
