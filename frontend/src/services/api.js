@@ -39,3 +39,6 @@ export const getCitasBarbero = (id) => api.get(`/citas/barbero/${id}`)
 export const createCita = (data) => api.post('/citas/', data)
 export const updateEstadoCita = (id, estado) => api.patch(`/citas/${id}/estado`, { estado })
 export const getDisponibilidad = (barberoId, fecha) => api.get(`/citas/disponibilidad/${barberoId}/${fecha}`)
+
+// ---- Reserva Pública ----
+export const createReservaPublica = (data) => api.post('/citas/reserva-publica', data)
