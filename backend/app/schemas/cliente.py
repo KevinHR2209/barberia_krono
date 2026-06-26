@@ -10,6 +10,8 @@ class ClienteBase(BaseModel):
     email: EmailStr
     telefono: Optional[str] = None
     direccion: Optional[str] = None
+    latitud: Optional[float] = None
+    longitud: Optional[float] = None
 
 
 class ClienteCreate(ClienteBase):
