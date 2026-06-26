@@ -7,13 +7,34 @@ from datetime import date
 
 from app.database import get_db
 from app.models.cita import Cita
+from app.models.cliente import Cliente
 from app.models.horario_barbero import HorarioBarbero
 from app.models.servicio import Servicio
 from app.schemas.cita import CitaCreate, CitaUpdateEstado, CitaOut
+from app.schemas.cliente import ClienteCreate
 from app.services.cita_service import crear_cita
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 router = APIRouter()
 
+
+# ── Schema reserva pública ────────────────────────────────────────────────────
+
+class ReservaPublicaCreate(BaseModel):
+    barbero_id: UUID
+    servicios_ids: List[UUID]
+    fecha: date
+    hora_inicio: str
+    nombre: str
+    apellido: str
+    email: EmailStr
+    telefono: Optional[str] = None
+    direccion: Optional[str] = None
+    comuna: Optional[str] = None
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/", response_model=List[CitaOut])
 def listar_citas(db: Session = Depends(get_db)):
@@ -88,6 +109,38 @@ def disponibilidad_barbero(barbero_id: UUID, fecha: date, db: Session = Depends(
         cursor += timedelta(minutes=30)
 
     return {"atiende": True, "bloques": bloques}
+
+
+@router.post("/reserva-publica", response_model=CitaOut, status_code=201)
+def reserva_publica(data: ReservaPublicaCreate, db: Session = Depends(get_db)):
+    """Endpoint público: crea cliente (o reutiliza por email) y agenda la cita."""
+    # Buscar o crear cliente
+    cliente = db.query(Cliente).filter(Cliente.email == data.email).first()
+    if not cliente:
+        cliente = Cliente(
+            nombre=data.nombre,
+            apellido=data.apellido,
+            email=data.email,
+            telefono=data.telefono,
+            direccion=data.direccion,
+            comuna=data.comuna or "",
+        )
+        db.add(cliente)
+        db.flush()
+
+    if not data.servicios_ids:
+        raise HTTPException(status_code=400, detail="Debes seleccionar al menos un servicio")
+
+    servicio_id = data.servicios_ids[0]
+
+    cita_data = CitaCreate(
+        cliente_id=cliente.id,
+        barbero_id=data.barbero_id,
+        servicio_id=servicio_id,
+        fecha=data.fecha,
+        hora_inicio=data.hora_inicio,
+    )
+    return crear_cita(db, cita_data)
 
 
 @router.post("/", response_model=CitaOut, status_code=201)
