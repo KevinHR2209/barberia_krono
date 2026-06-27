@@ -4,16 +4,19 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 from uuid import UUID
 from datetime import date
+from pydantic import BaseModel
+from fastapi import BackgroundTasks
+from app.routers.citas_cancel import notificar_krono_sync
 
 from app.database import get_db
 from app.models.cita import Cita
 from app.models.horario_barbero import HorarioBarbero
 from app.models.servicio import Servicio
+from app.models.cliente import Cliente
 from app.schemas.cita import CitaCreate, CitaUpdateEstado, CitaOut
 from app.services.cita_service import crear_cita
 
 router = APIRouter()
-
 
 @router.get("/", response_model=List[CitaOut])
 def listar_citas(db: Session = Depends(get_db)):
@@ -33,7 +36,7 @@ def citas_por_barbero(barbero_id: UUID, db: Session = Depends(get_db)):
     ).filter(
         Cita.barbero_id == barbero_id,
         Cita.estado != "cancelada",
-    ).order_by(Cita.fecha, Cita.hora_inicio).all()
+        ).order_by(Cita.fecha, Cita.hora_inicio).all()
 
 
 @router.get("/disponibilidad/{barbero_id}/{fecha}")
@@ -43,7 +46,7 @@ def disponibilidad_barbero(barbero_id: UUID, fecha: date, db: Session = Depends(
         HorarioBarbero.barbero_id == barbero_id,
         HorarioBarbero.dia_semana == dia_semana,
         HorarioBarbero.activo == True,
-    ).first()
+        ).first()
 
     if not horario:
         return {"atiende": False, "bloques": []}
@@ -52,7 +55,7 @@ def disponibilidad_barbero(barbero_id: UUID, fecha: date, db: Session = Depends(
         Cita.barbero_id == barbero_id,
         Cita.fecha == fecha,
         Cita.estado != "cancelada",
-    ).all()
+        ).all()
 
     from datetime import datetime, timedelta
     bloques = []
@@ -96,16 +99,30 @@ def nueva_cita(data: CitaCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{cita_id}/estado", response_model=CitaOut)
-def cambiar_estado_cita(cita_id: UUID, data: CitaUpdateEstado, db: Session = Depends(get_db)):
-    cita = db.query(Cita).filter(Cita.id == cita_id).first()
+def cambiar_estado_cita(cita_id: UUID, data: CitaUpdateEstado, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    # Añadimos los joinedload para que Krono reciba los nombres y datos del barbero/cliente
+    cita = db.query(Cita).options(
+        joinedload(Cita.cliente),
+        joinedload(Cita.barbero),
+        joinedload(Cita.servicio),
+    ).filter(Cita.id == cita_id).first()
+
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
+
     estados_validos = ["asignada", "completada", "cancelada"]
     if data.estado not in estados_validos:
         raise HTTPException(status_code=400, detail=f"Estado inválido. Debe ser uno de: {estados_validos}")
+
+    estado_anterior = cita.estado
     cita.estado = data.estado
     db.commit()
     db.refresh(cita)
+
+    # Disparar a Krono solo si se canceló desde el panel
+    if data.estado == "cancelada" and estado_anterior != "cancelada":
+        background_tasks.add_task(notificar_krono_sync, str(cita.id))
+
     return cita
 
 
@@ -150,6 +167,66 @@ def obtener_cita(cita_id: UUID, db: Session = Depends(get_db)):
     return cita
 
 
+# ── Webhook de Integración con Krono ──────────────────────────────────────────
+
+class KronoWinner(BaseModel):
+    patient_id: UUID
+    display_name: str
+
+class KronoWebhookPayload(BaseModel):
+    transaction_id: str
+    correlation_id: str
+    appointment_id: UUID
+    status: str
+    winner: KronoWinner
+    reassigned_at: str
+    elapsed_ms: int
+
+@router.post("/krono-resultado", tags=["Integración Krono"])
+def recibir_resultado_krono(payload: KronoWebhookPayload, db: Session = Depends(get_db)):
+    """
+    Endpoint que Krono llama cuando un candidato gana la subasta.
+    """
+    # Si por alguna razón la subasta falló o expiró sin ganador, lo ignoramos
+    if payload.status != "reassigned":
+        return {"ok": True, "mensaje": "Subasta sin reasignación, no se hace nada."}
+
+    # Buscamos la cita original que fue cancelada para clonar sus datos
+    cita_cancelada = db.query(Cita).filter(Cita.id == payload.appointment_id).first()
+    if not cita_cancelada:
+        raise HTTPException(status_code=404, detail="Cita original no encontrada en la barbería")
+
+    nuevo_cliente_id = payload.winner.patient_id
+
+    # Verificamos que el cliente ganador realmente exista en nuestra BD
+    cliente_ganador = db.query(Cliente).filter(Cliente.id == nuevo_cliente_id).first()
+    if not cliente_ganador:
+        raise HTTPException(status_code=404, detail="El cliente ganador no existe en la barbería")
+
+    # Creamos la nueva cita idéntica a la anterior, pero con el nuevo cliente
+    nueva_cita = Cita(
+        cliente_id=cliente_ganador.id,
+        barbero_id=cita_cancelada.barbero_id,
+        servicio_id=cita_cancelada.servicio_id,
+        silla_id=cita_cancelada.silla_id,
+        fecha=cita_cancelada.fecha,
+        hora_inicio=cita_cancelada.hora_inicio,
+        hora_fin=cita_cancelada.hora_fin,
+        estado="asignada",
+        notas=f"Reasignada automáticamente por Krono (Transacción: {payload.transaction_id})"
+    )
+
+    db.add(nueva_cita)
+    db.commit()
+    db.refresh(nueva_cita)
+
+    return {
+        "ok": True,
+        "mensaje": "Nueva cita agendada exitosamente",
+        "nueva_cita_id": str(nueva_cita.id)
+    }
+
+
 # ── HTML helpers ──────────────────────────────────────────────────────────────
 
 def _base_html(titulo: str, icono: str, color: str, mensaje: str, detalle: str = "") -> str:
@@ -179,7 +256,6 @@ def _base_html(titulo: str, icono: str, color: str, mensaje: str, detalle: str =
     </div></body></html>
     """
 
-
 def _html_ok(nombre: str, servicio: str, fecha: str, hora: str) -> str:
     detalle = f"""
     <div class="detail">
@@ -196,10 +272,8 @@ def _html_ok(nombre: str, servicio: str, fecha: str, hora: str) -> str:
         detalle
     )
 
-
 def _html_error(titulo: str, mensaje: str) -> str:
     return _base_html(titulo, "❌", "#ef4444", mensaje)
-
 
 def _html_info(titulo: str, mensaje: str) -> str:
     return _base_html(titulo, "ℹ️", "#3b82f6", mensaje)

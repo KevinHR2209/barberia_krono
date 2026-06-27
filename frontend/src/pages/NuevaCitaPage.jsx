@@ -2,26 +2,11 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { FiArrowLeft } from 'react-icons/fi'
-import { getBarberos, getClientes, getServicios, createCita, createCliente, getHorariosBarbero } from '../services/api'
+import { getBarberos, getClientes, getServicios, createCita, createCliente, getHorariosBarbero, getDisponibilidad } from '../services/api'
 
 const DIAS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const TEL_RE = /^\+\d{7,15}$/
-const SLOT_MIN = 45
-
-function generarBloques() {
-  const bloques = []
-  let h = 9 * 60
-  while (h + SLOT_MIN <= 19 * 60) {
-    const hh = String(Math.floor(h / 60)).padStart(2, '0')
-    const mm = String(h % 60).padStart(2, '0')
-    bloques.push(`${hh}:${mm}`)
-    h += SLOT_MIN
-  }
-  return bloques
-}
-
-const BLOQUES = generarBloques()
 
 export default function NuevaCitaPage() {
   const navigate = useNavigate()
@@ -33,6 +18,9 @@ export default function NuevaCitaPage() {
 
   const [form, setForm] = useState({ cliente_id:'', barbero_id:'', servicio_id:'', fecha:'', hora_inicio:'', notas:'' })
   const [clienteForm, setClienteForm] = useState({ nombre:'', apellido:'', email:'', telefono:'', direccion:'', latitud: null, longitud: null })
+
+  const [bloques, setBloques] = useState([])
+  const [loadingBloques, setLoadingBloques] = useState(false)
 
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
@@ -49,18 +37,17 @@ export default function NuevaCitaPage() {
     if (form.barbero_id) getHorariosBarbero(form.barbero_id).then(r => setHorarios(r.data))
   }, [form.barbero_id])
 
-  const bloquesDisponibles = () => {
-    const ahora = new Date()
-    return BLOQUES.filter(bloque => {
-      if (form.fecha === today) {
-        const [hh, mm] = bloque.split(':').map(Number)
-        const bloqueDate = new Date()
-        bloqueDate.setHours(hh, mm, 0, 0)
-        return bloqueDate > ahora
-      }
-      return true
-    })
-  }
+  // Consultar disponibilidad real al backend
+  useEffect(() => {
+    if (form.barbero_id && form.fecha) {
+      setLoadingBloques(true)
+      getDisponibilidad(form.barbero_id, form.fecha)
+          .then(r => setBloques(r.data.bloques || []))
+          .finally(() => setLoadingBloques(false))
+    } else {
+      setBloques([])
+    }
+  }, [form.barbero_id, form.fecha])
 
   // Buscar dirección en OpenStreetMap (Nominatim)
   const buscarDireccionOSM = async (query) => {
@@ -168,12 +155,17 @@ export default function NuevaCitaPage() {
                   value={form.hora_inicio}
                   onChange={e => setForm({...form, hora_inicio:e.target.value})}
                   required
-                  disabled={!form.fecha}
+                  disabled={!form.fecha || loadingBloques}
               >
-                <option value="">Selecciona hora...</option>
-                {bloquesDisponibles().map(b => <option key={b} value={b}>{b}</option>)}
+                <option value="">{loadingBloques ? 'Cargando horas...' : 'Selecciona hora...'}</option>
+                {bloques.filter(b => !b.ocupado).map(b => (
+                    <option key={b.hora} value={b.hora}>{b.hora}</option>
+                ))}
               </select>
               {errors.hora_inicio && <p className="text-red-500 text-xs mt-1">{errors.hora_inicio}</p>}
+              {form.fecha && form.barbero_id && !loadingBloques && bloques.length === 0 && (
+                  <p className="text-gray-400 text-xs mt-1">El barbero no atiende este día.</p>
+              )}
             </div>
           </div>
 
@@ -214,7 +206,6 @@ export default function NuevaCitaPage() {
                     {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
                   </div>
 
-                  {/* BLOQUE DIRECCIÓN CON AUTOCOMPLETADO */}
                   <div className="relative">
                     <input
                         placeholder="Dirección (Ej: Avenida Brasil, Valparaíso)"
