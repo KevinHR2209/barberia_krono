@@ -24,7 +24,8 @@ services:
     container_name: barberia_backend
     environment:
       DATABASE_URL: postgresql://krono:krono123@db:5432/barberia_krono
-      MAILTRAP_TOKEN: 6ff558f88cde51886affb361b6e6fe07
+      GMAIL_USER: barberiakrono@gmail.com
+      GMAIL_PASS: tbrxsghkfcsnaqsf
       FRONTEND_URL: http://localhost:5173
     depends_on:
       db:

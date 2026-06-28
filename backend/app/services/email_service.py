@@ -1,12 +1,11 @@
 import os
-import requests
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-MAILTRAP_TOKEN = os.getenv("MAILTRAP_TOKEN", "")
+GMAIL_USER = os.getenv("GMAIL_USER", "")
+GMAIL_PASS = os.getenv("GMAIL_PASS", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-
-MAILTRAP_API_URL = "https://send.api.mailtrap.io/api/send"
-SENDER_EMAIL = "hello@demomailtrap.co"
-SENDER_NAME = "Barbería Krono"
 
 
 def _html_confirmacion(datos: dict) -> str:
@@ -21,10 +20,7 @@ def _html_confirmacion(datos: dict) -> str:
           <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(30,58,138,0.1);">
             <tr>
               <td style="background:linear-gradient(135deg,#1d4ed8,#1e3a8a);padding:32px 40px;text-align:center;">
-                <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:12px;padding:10px 16px;margin-bottom:12px;">
-                  <span style="color:#fff;font-size:28px;">✂</span>
-                </div>
-                <h1 style="color:#ffffff;margin:0;font-size:26px;font-weight:900;">KRONO Barbería</h1>
+                <h1 style="color:#ffffff;margin:0;font-size:26px;font-weight:900;">✂ KRONO Barbería</h1>
                 <p style="color:#bfdbfe;margin:6px 0 0;font-size:14px;">Confirmación de reserva</p>
               </td>
             </tr>
@@ -77,38 +73,23 @@ def _html_confirmacion(datos: dict) -> str:
 
 
 def enviar_confirmacion(destinatario: str, datos: dict):
-    if not MAILTRAP_TOKEN:
-        print(f"[EMAIL] Sin MAILTRAP_TOKEN. Correo para {destinatario} NO enviado.")
-        print(f"[EMAIL] Token cancelación: {datos.get('cancel_token')}")
+    if not GMAIL_USER or not GMAIL_PASS:
+        print(f"[EMAIL] Sin GMAIL_USER/GMAIL_PASS. Correo para {destinatario} NO enviado.")
         return
 
-    payload = {
-        "from": {"email": SENDER_EMAIL, "name": SENDER_NAME},
-        "to": [{"email": destinatario}],
-        "subject": "✂ Confirmación de cita — Barbería Krono",
-        "html": _html_confirmacion(datos),
-        "text": (
-            f"Hola {datos['cliente_nombre']},\n\n"
-            f"Tu cita ha sido confirmada.\n"
-            f"Barbero: {datos['barbero']}\n"
-            f"Servicio: {datos['servicio']}\n"
-            f"Fecha: {datos['fecha']}\n"
-            f"Hora: {datos['hora']}\n\n"
-            f"Para cancelar: {FRONTEND_URL}/cancelar/{datos['cancel_token']}"
-        ),
-        "category": "Reserva Barberia",
-    }
-
-    headers = {
-        "Authorization": f"Bearer {MAILTRAP_TOKEN}",
-        "Content-Type": "application/json",
-    }
-
     try:
-        resp = requests.post(MAILTRAP_API_URL, json=payload, headers=headers, timeout=10)
-        if resp.status_code == 200:
-            print(f"[EMAIL] Confirmación enviada a {destinatario}")
-        else:
-            print(f"[EMAIL] Error Mailtrap {resp.status_code}: {resp.text}")
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "✂ Confirmación de cita — Barbería Krono"
+        msg["From"] = f"Barbería Krono <{GMAIL_USER}>"
+        msg["To"] = destinatario
+
+        msg.attach(MIMEText(_html_confirmacion(datos), "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_USER, GMAIL_PASS)
+            server.sendmail(GMAIL_USER, destinatario, msg.as_string())
+
+        print(f"[EMAIL] Confirmación enviada a {destinatario}")
+
     except Exception as e:
-        print(f"[EMAIL] Excepción al enviar: {e}")
+        print(f"[EMAIL] Error al enviar: {e}")
